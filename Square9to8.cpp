@@ -19,7 +19,7 @@
 
 /***********************************************************/
 
-#define D3DFVF_VERTEX_CUSTOM_STATIC (D3DFVF_XYZRHW | D3DFVF_DIFFUSE)
+#define D3DFVF_VERTEX_CUSTOM_STATIC (D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1)
 struct SETFVF_VERTEX_CUSTOM_STATIC
 {
     FLOAT x, y, z, rhw;
@@ -38,7 +38,7 @@ struct SETFVF_VERTEX_CUSTOM {
     Colors!!11!!1! 
     support function that convert the format like with shaders—where a value of 0.0 to 1.0 represents a color value of 0 to 255;
 */
-D3DCOLOR cfloat4(float r, float g, float b, float a)
+static D3DCOLOR cfloat4(float r, float g, float b, float a)
 {
     int ri = (int)(r * 255.0f);
     int gi = (int)(g * 255.0f);
@@ -48,7 +48,7 @@ D3DCOLOR cfloat4(float r, float g, float b, float a)
     return D3DCOLOR_RGBA(ri, gi, bi, ai);
 }
 
-D3DCOLOR cfloat3(float r, float g, float b)
+static D3DCOLOR cfloat3(float r, float g, float b)
 {
     int ri = (int)(r * 255.0f);
     int gi = (int)(g * 255.0f);
@@ -72,9 +72,14 @@ D3DCOLOR cfloat3(float r, float g, float b)
 #define COLOR_BACKGROUND_A      1.0f
 
 #define D3D_ERASE_RENDER        1
+#define D3D_ENABLE_ALPHA        1
+#define D3D_ENABLE_TEXTURE      1
+
 
 #define VERTEX_POINTS_COUNT     4
 #define VERTEX_TRANGLE_COUNT    2
+
+#define OBJ_TEXTURE_PATH        _T("res/HungryFish.png")
 
 /***********************************************************/
 /*
@@ -85,7 +90,8 @@ D3DCOLOR cfloat3(float r, float g, float b)
 */
 class CMyD3DApplication : public CD3DApplication
 {
-    LPDIRECT3DVERTEXBUFFER8 D3D_VERTEX_BUFFOR;
+    LPDIRECT3DVERTEXBUFFER8     D3D_VERTEX_BUFFOR   = NULL;
+    LPDIRECT3DTEXTURE8          D3D_OBJ_TEXTURE     = NULL;
 
     protected:
         // Initialize scene objects
@@ -102,20 +108,24 @@ class CMyD3DApplication : public CD3DApplication
              
                 // Settings trangle
 
-                float posX = 100.0f;
-                float posY = 60.0f;
-                float posZ = 0.0f;
+                const float centerX = 320.0f / 2.0f;
+                const float centerY = 240.0f / 2.0f;
 
-                float sizeX = 200.0f;
-                float sizeY = 200.0f;
-            
-                SETFVF_VERTEX_CUSTOM_STATIC vertices[] =
-                {
-                    { posX,         posY,         posZ,     1.0f,   COLOR_RED,      0.0f,   0.0f },
-                    { posX + sizeX, posY,         posZ,     1.0f,   COLOR_GREEN,    1.0f,   0.0f },
-                    { posX,         posY + sizeY, posZ,     1.0f,   COLOR_BLUE,     0.0f,   1.0f },
-                    { posX + sizeX, posY + sizeY, posZ,     1.0f,   COLOR_WHITE,    1.0f,   1.0f }
-                };
+                const float scale = 8.0f;
+                const float sizeX = 36.0f * scale;
+                const float sizeY = 33.0f * scale;
+
+                    const float posX = centerX - sizeX / 3.0f;
+                    const float posY = centerY - sizeY / 3.0f;
+                    const float posZ = 0.0f;
+
+                    SETFVF_VERTEX_CUSTOM_STATIC vertices[] =
+                    {
+                        { posX,         posY,         posZ,     1.0f,   COLOR_WHITE,    0.0f,   0.0f },
+                        { posX + sizeX, posY,         posZ,     1.0f,   COLOR_WHITE,    1.0f,   0.0f },
+                        { posX,         posY + sizeY, posZ,     1.0f,   COLOR_WHITE,    0.0f,   1.0f },
+                        { posX + sizeX, posY + sizeY, posZ,     1.0f,   COLOR_WHITE,    1.0f,   1.0f }
+                    };
 
                 VOID* vertices_p;
 
@@ -124,6 +134,16 @@ class CMyD3DApplication : public CD3DApplication
 
             memcpy(vertices_p, vertices, sizeof(vertices));
             D3D_VERTEX_BUFFOR->Unlock();
+
+            // Set texture
+            #if D3D_ENABLE_TEXTURE
+                HRESULT _OBJ_TEXTURE_LOAD = D3DXCreateTextureFromFile(m_pd3dDevice, OBJ_TEXTURE_PATH, &D3D_OBJ_TEXTURE);
+                if (FAILED(_OBJ_TEXTURE_LOAD))
+                    OutputDebugString(_T("Error! Cannot load texture;\n"));
+            #else
+                OutputDebugString(_T("Warning! Ignoring drawing texture\n"));
+            #endif
+
 
             return S_OK;
         }
@@ -137,13 +157,24 @@ class CMyD3DApplication : public CD3DApplication
                 D3D_VERTEX_BUFFOR->Release();
                 D3D_VERTEX_BUFFOR = NULL;
             }
+
+            #if D3D_ENABLE_TEXTURE
+
+                if (D3D_OBJ_TEXTURE)
+                {
+                    D3D_OBJ_TEXTURE->Release();
+                    D3D_OBJ_TEXTURE = NULL;
+                }
+
+            #endif
+
             return S_OK;
         }
 
         // Rendering scene
         HRESULT Render() override
         {
-            #if defined(D3D_ERASE_RENDER)
+            #if D3D_ERASE_RENDER
                 m_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET, COLOR_BACKGROUND_RGB, COLOR_BACKGROUND_A, 0);
             #endif
 
@@ -152,8 +183,22 @@ class CMyD3DApplication : public CD3DApplication
                 // Drawing trangle
                 m_pd3dDevice->SetStreamSource(0, D3D_VERTEX_BUFFOR, sizeof(SETFVF_VERTEX_CUSTOM_STATIC));
                 m_pd3dDevice->SetVertexShader(D3DFVF_VERTEX_CUSTOM_STATIC);
-                m_pd3dDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, VERTEX_TRANGLE_COUNT);
 
+                // Set texture
+                #if D3D_ENABLE_TEXTURE
+                    m_pd3dDevice->SetTexture(0, D3D_OBJ_TEXTURE);
+                #endif 
+
+                // Set alpha color
+                #if D3D_ENABLE_ALPHA
+                    m_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, D3D_ENABLE_ALPHA);
+
+                    m_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+                    m_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+                #endif 
+
+
+                m_pd3dDevice->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, VERTEX_TRANGLE_COUNT);
                 m_pd3dDevice->EndScene();
             }
             return S_OK;
